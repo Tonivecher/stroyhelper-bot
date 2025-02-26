@@ -103,12 +103,20 @@ keyboard = ReplyKeyboardMarkup(
 # Клавиатура для выбора типа помещения
 def get_room_type_keyboard():
     buttons = [[KeyboardButton(text=room_type.value)] for room_type in RoomType]
+    buttons.append([KeyboardButton(text="🔙 Назад в меню")])
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 # Клавиатура для выбора формы помещения
 def get_room_shape_keyboard():
     buttons = [[KeyboardButton(text=shape.value)] for shape in RoomShape]
+    buttons.append([KeyboardButton(text="🔙 Назад в меню")])
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+# Обработчик кнопки "Назад в меню"
+@dp.message(F.text == "🔙 Назад в меню")
+async def back_to_menu(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer("👋 Выберите действие:", reply_markup=keyboard)
 
 # Команда /start
 @dp.message(Command("start"))
@@ -295,7 +303,11 @@ async def materials_button(message: types.Message):
 # Калькулятор бюджета
 @dp.message(F.text == "💰 Калькулятор бюджета")
 async def budget_calculator(message: types.Message, state: FSMContext):
-    await message.answer("Введите ваш бюджет в рублях:")
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="🔙 Назад в меню")]],
+        resize_keyboard=True
+    )
+    await message.answer("Введите ваш бюджет в рублях:", reply_markup=keyboard)
     await state.set_state(BudgetCalculatorStates.waiting_for_budget)
 
 @dp.message(BudgetCalculatorStates.waiting_for_budget)
@@ -412,12 +424,17 @@ ai_helper = AIHelper()
 # Добавляем обработчик для AI помощника
 @dp.message(F.text == "🤖 AI Помощник")
 async def ai_helper_start(message: types.Message, state: FSMContext):
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="🔙 Назад в меню")]],
+        resize_keyboard=True
+    )
     await message.answer(
         "Задайте мне вопрос о строительных материалах, и я постараюсь помочь!\n"
         "Например:\n"
         "- Какой ламинат лучше выбрать для кухни?\n"
         "- Чем отличается керамогранит от керамической плитки?\n"
-        "- Какая краска подойдет для ванной комнаты?"
+        "- Какая краска подойдет для ванной комнаты?",
+        reply_markup=keyboard
     )
     await state.set_state(AIStates.waiting_for_question)
 
