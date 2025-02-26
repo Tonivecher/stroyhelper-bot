@@ -1,0 +1,124 @@
+import logging
+import asyncio
+import os
+import json
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.filters import Command
+from aiogram.client.default import DefaultBotProperties
+from dotenv import load_dotenv
+
+# Загрузка переменных окружения
+load_dotenv()
+
+API_TOKEN = os.getenv("BOT_TOKEN")
+if not API_TOKEN:
+    logging.critical("Ошибка: BOT_TOKEN не задан! Завершаю работу.")
+    exit(1)
+
+# Логирование
+logging.basicConfig(level=logging.INFO)
+
+# Создание бота и диспетчера
+bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
+dp = Dispatcher()
+
+# Загрузка материалов из JSON
+with open("materials.json", "r", encoding="utf-8") as file:
+    materials = json.load(file)
+
+# Главное меню (клавиатура)
+keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="📋 Материалы")],
+        [KeyboardButton(text="📐 Площадь")],
+        [KeyboardButton(text="💰 Бюджет")]
+    ],
+    resize_keyboard=True
+)
+
+# Генерация inline-кнопок для категорий
+def get_categories_keyboard():
+    keyboard = InlineKeyboardMarkup(row_width=1)
+    for category in materials:
+        keyboard.add(InlineKeyboardButton(text=category, callback_data=f"category:{category}"))
+    keyboard.add(InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu"))
+    return keyboard
+
+# Генерация inline-кнопок для подкатегорий
+def get_subcategories_keyboard(category):
+    keyboard = InlineKeyboardMarkup(row_width=1)
+    for subcategory in materials[category]:
+        keyboard.add(InlineKeyboardButton(text=subcategory, callback_data=f"subcategory:{category}:{subcategory}"))
+    keyboard.add(InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_categories"))
+    keyboard.add(InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu"))
+    return keyboard
+
+# Генерация inline-кнопок для брендов
+def get_brands_keyboard(category, subcategory):
+    keyboard = InlineKeyboardMarkup(row_width=1)
+    for brand in materials[category][subcategory]["brands"]:
+        keyboard.add(InlineKeyboardButton(text=brand, callback_data=f"brand:{category}:{subcategory}:{brand}"))
+    keyboard.add(InlineKeyboardButton(text="🔙 Назад", callback_data=f"back_to_subcategories:{category}"))
+    keyboard.add(InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu"))
+    return keyboard
+
+# Команда /start
+@dp.message(Command("start"))
+async def start_command(message: types.Message):
+    await message.answer_sticker("CAACAgIAAxkBAAIDgGQ4FqZcO6B6Y9zSHG7I7BpluQ4eAAIwAwACMNSRSqPzoO2olPsaNAQ")  # Добавь свой стикер
+    await message.answer("👋 Привет! Я StroyHelper бот. Выберите действие:", reply_markup=keyboard)
+
+# Обработчик "📋 Материалы"
+@dp.message(F.text == "📋 Материалы")
+async def materials_button(message: types.Message):
+    await message.answer("📦 Выберите категорию материалов:", reply_markup=get_categories_keyboard())
+
+# Обработчик выбора категории
+@dp.callback_query(F.data.startswith("category:"))
+async def category_callback(callback: types.CallbackQuery):
+    category = callback.data.split(":")[1]
+    await callback.answer()
+    await callback.message.edit_text(f"📌 Категория: {category}\nВыберите подкатегорию:", reply_markup=get_subcategories_keyboard(category))
+
+# Обработчик выбора подкатегории
+@dp.callback_query(F.data.startswith("subcategory:"))
+async def subcategory_callback(callback: types.CallbackQuery):
+    _, category, subcategory = callback.data.split(":")
+    await callback.answer()
+    await callback.message.edit_text(f"🔹 Подкатегория: {subcategory}\nВыберите бренд:", reply_markup=get_brands_keyboard(category, subcategory))
+
+# Обработчик выбора бренда
+@dp.callback_query(F.data.startswith("brand:"))
+async def brand_callback(callback: types.CallbackQuery):
+    _, category, subcategory, brand = callback.data.split(":")
+    description = materials[category][subcategory]["description"]
+    await callback.answer()
+    await callback.message.edit_text(f"✅ Вы выбрали:\n<b>Категория:</b> {category}\n<b>Подкатегория:</b> {subcategory}\n<b>Бренд:</b> {brand}\n\n📦 Подробнее: {description}", parse_mode="HTML")
+
+# Обработчик кнопки "Назад" на категорию
+@dp.callback_query(F.data == "back_to_categories")
+async def back_to_categories_callback(callback: types.CallbackQuery):
+    await callback.answer()
+    await callback.message.edit_text("📦 Выберите категорию материалов:", reply_markup=get_categories_keyboard())
+
+# Обработчик кнопки "Назад" на подкатегорию
+@dp.callback_query(F.data.startswith("back_to_subcategories:"))
+async def back_to_subcategories_callback(callback: types.CallbackQuery):
+    _, category = callback.data.split(":")
+    await callback.answer()
+    await callback.message.edit_text(f"📌 Категория: {category}\nВыберите подкатегорию:", reply_markup=get_subcategories_keyboard(category))
+
+# Обработчик кнопки "Главное меню"
+@dp.callback_query(F.data == "main_menu")
+async def main_menu_callback(callback: types.CallbackQuery):
+    await callback.answer()
+    await callback.message.edit_text("👋 Привет! Я StroyHelper бот. Выбери действие:", reply_markup=keyboard)
+
+# Запуск бота
+async def main():
+    await bot.delete_webhook(drop_pending_updates=True)  # Очищаем обновления
+    await dp.start_polling(bot)  # Запускаем бота
+
+if __name__ == "__main__":
+    asyncio.run(main())
