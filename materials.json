@@ -1,0 +1,38 @@
+{
+    "Напольные покрытия": {
+        "Ламинат": {
+            "brands": ["Quick-Step", "Tarkett", "Kronospan"],
+            "description": "Прочный ламинат с различными дизайнами",
+            "price": 1599.99
+        },
+        "Паркет": {
+            "brands": ["Bruce", "Armstrong", "Mohawk"],
+            "description": "Натуральное деревянное напольное покрытие с отличной прочностью",
+            "price": 2999.99
+        }
+    },
+    "Стеновые материалы": {
+        "Краска": {
+            "brands": ["Dulux", "Benjamin Moore", "Sherwin-Williams"],
+            "description": "Высококачественная краска для внутренней отделки",
+            "price": 1899.99
+        },
+        "Обои": {
+            "brands": ["Graham & Brown", "York", "Brewster"],
+            "description": "Дизайнерские обои для внутренней отделки",
+            "price": 1299.99
+        }
+    },
+    "Плитка": {
+        "Керамическая": {
+            "brands": ["Porcelanosa", "Marazzi", "Daltile"],
+            "description": "Универсальная керамическая плитка для стен и пола",
+            "price": 899.99
+        },
+        "Керамогранит": {
+            "brands": ["Atlas Concorde", "RAK Ceramics", "Florida Tile"],
+            "description": "Премиальный керамогранит с высокой прочностью",
+            "price": 1499.99
+        }
+    }
+}
