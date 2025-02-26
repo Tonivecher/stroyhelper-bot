@@ -11,15 +11,61 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 from ai_helper import AIHelper
+from dataclasses import dataclass
+from enum import Enum
+from typing import List, Optional, Dict, Union
 
-# Состояния для калькуляторов площади и бюджета
-class CalcStates(StatesGroup):
+# Типы помещений
+class RoomType(Enum):
+    KITCHEN = "Кухня"
+    BEDROOM = "Спальня"
+    LIVING_ROOM = "Гостиная"
+    BATHROOM = "Ванная"
+    CUSTOM = "Другое"
+
+# Формы помещений
+class RoomShape(Enum):
+    RECTANGULAR = "Прямоугольная"
+    SQUARE = "Квадратная"
+    CIRCULAR = "Круглая"
+    CUSTOM = "Нестандартная"
+
+# Данные о помещении
+@dataclass
+class RoomData:
+    room_type: RoomType
+    shape: RoomShape
+    length: Optional[float] = None
+    width: Optional[float] = None
+    height: float = 2.5
+    diameter: Optional[float] = None
+    windows: List[Dict[str, float]] = None
+    doors: List[Dict[str, float]] = None
+    custom_measurements: List[Dict[str, float]] = None
+
+    def __post_init__(self):
+        self.windows = self.windows or []
+        self.doors = self.doors or []
+        self.custom_measurements = self.custom_measurements or []
+
+# Состояния для калькулятора площади
+class AreaCalculatorStates(StatesGroup):
+    waiting_for_room_type = State()
+    waiting_for_room_shape = State()
     waiting_for_length = State()
     waiting_for_width = State()
-    waiting_for_material = State()
-    waiting_for_budget = State()
+    waiting_for_height = State()
+    waiting_for_diameter = State()
+    waiting_for_windows = State()
+    waiting_for_doors = State()
+    waiting_for_custom_measurements = State()
 
-# Добавляем новое состояние для AI чата
+# Состояния для калькулятора бюджета
+class BudgetCalculatorStates(StatesGroup):
+    waiting_for_budget = State()
+    waiting_for_material = State()
+
+# Состояния для AI чата
 class AIStates(StatesGroup):
     waiting_for_question = State()
 
@@ -54,77 +100,205 @@ keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# Клавиатура категорий
-def get_categories_keyboard():
-    buttons = []
-    for category in materials:
-        buttons.append([InlineKeyboardButton(text=category, callback_data=f"category:{category}")])
-    buttons.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+# Клавиатура для выбора типа помещения
+def get_room_type_keyboard():
+    buttons = [[KeyboardButton(text=room_type.value)] for room_type in RoomType]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
-# Клавиатура подкатегорий
-def get_subcategories_keyboard(category):
-    buttons = []
-    for subcategory in materials[category]:
-        buttons.append([InlineKeyboardButton(text=subcategory, callback_data=f"subcategory:{category}:{subcategory}")])
-    buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_categories")])
-    buttons.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-# Клавиатура брендов
-def get_brands_keyboard(category, subcategory):
-    buttons = []
-    for brand in materials[category][subcategory]["brands"]:
-        buttons.append([InlineKeyboardButton(text=brand, callback_data=f"brand:{category}:{subcategory}:{brand}")])
-    buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data=f"back_to_subcategories:{category}")])
-    buttons.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+# Клавиатура для выбора формы помещения
+def get_room_shape_keyboard():
+    buttons = [[KeyboardButton(text=shape.value)] for shape in RoomShape]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 # Команда /start
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
     await message.answer("👋 Привет! Я StroyHelper бот. Выберите действие:", reply_markup=keyboard)
 
+# Обработчик кнопки "Калькулятор площади"
+@dp.message(F.text == "📐 Калькулятор площади")
+async def area_calculator_start(message: types.Message, state: FSMContext):
+    await message.answer(
+        "Выберите тип помещения:",
+        reply_markup=get_room_type_keyboard()
+    )
+    await state.set_state(AreaCalculatorStates.waiting_for_room_type)
+
+# Обработчик выбора типа помещения
+@dp.message(AreaCalculatorStates.waiting_for_room_type)
+async def process_room_type(message: types.Message, state: FSMContext):
+    try:
+        room_type = next(rt for rt in RoomType if rt.value == message.text)
+        await state.update_data(room_type=room_type.name)
+        await message.answer(
+            "Выберите форму помещения:",
+            reply_markup=get_room_shape_keyboard()
+        )
+        await state.set_state(AreaCalculatorStates.waiting_for_room_shape)
+    except StopIteration:
+        await message.answer("Пожалуйста, выберите тип помещения из предложенных вариантов.")
+
+# Обработчик выбора формы помещения
+@dp.message(AreaCalculatorStates.waiting_for_room_shape)
+async def process_room_shape(message: types.Message, state: FSMContext):
+    try:
+        room_shape = next(rs for rs in RoomShape if rs.value == message.text)
+        await state.update_data(room_shape=room_shape.name)
+
+        if room_shape == RoomShape.CIRCULAR:
+            await message.answer(
+                "Введите диаметр помещения в метрах:",
+                reply_markup=types.ReplyKeyboardRemove()
+            )
+            await state.set_state(AreaCalculatorStates.waiting_for_diameter)
+        else:
+            await message.answer(
+                "Введите длину помещения в метрах:",
+                reply_markup=types.ReplyKeyboardRemove()
+            )
+            await state.set_state(AreaCalculatorStates.waiting_for_length)
+    except StopIteration:
+        await message.answer("Пожалуйста, выберите форму помещения из предложенных вариантов.")
+
+# Обработчик ввода длины помещения
+@dp.message(AreaCalculatorStates.waiting_for_length)
+async def process_length(message: types.Message, state: FSMContext):
+    try:
+        length = float(message.text)
+        if length <= 0:
+            raise ValueError("Длина должна быть положительным числом")
+
+        await state.update_data(length=length)
+        data = await state.get_data()
+
+        if data["room_shape"] == RoomShape.SQUARE.name:
+            await state.update_data(width=length)
+            await message.answer("Введите высоту потолков в метрах:")
+            await state.set_state(AreaCalculatorStates.waiting_for_height)
+        else:
+            await message.answer("Введите ширину помещения в метрах:")
+            await state.set_state(AreaCalculatorStates.waiting_for_width)
+    except ValueError as e:
+        await message.answer("Пожалуйста, введите корректное положительное число.")
+
+# Обработчик ввода ширины помещения
+@dp.message(AreaCalculatorStates.waiting_for_width)
+async def process_width(message: types.Message, state: FSMContext):
+    try:
+        width = float(message.text)
+        if width <= 0:
+            raise ValueError("Ширина должна быть положительным числом")
+
+        await state.update_data(width=width)
+        await message.answer("Введите высоту потолков в метрах:")
+        await state.set_state(AreaCalculatorStates.waiting_for_height)
+    except ValueError:
+        await message.answer("Пожалуйста, введите корректное положительное число.")
+
+# Обработчик ввода высоты помещения
+@dp.message(AreaCalculatorStates.waiting_for_height)
+async def process_height(message: types.Message, state: FSMContext):
+    try:
+        height = float(message.text)
+        if height <= 0:
+            raise ValueError("Высота должна быть положительным числом")
+
+        data = await state.get_data()
+        await state.update_data(height=height)
+
+        # Расчет площади и объема
+        if data["room_shape"] == RoomShape.RECTANGULAR.name or data["room_shape"] == RoomShape.SQUARE.name:
+            length = data["length"]
+            width = data["width"]
+            floor_area = length * width
+            wall_area = 2 * (length + width) * height
+            volume = floor_area * height
+
+            result = (
+                f"📊 Результаты расчета:\n\n"
+                f"📏 Площадь пола: {floor_area:.2f} м²\n"
+                f"🏗 Площадь стен (без учета окон и дверей): {wall_area:.2f} м²\n"
+                f"📦 Объем помещения: {volume:.2f} м³\n\n"
+                f"❓ Хотите указать размеры окон и дверей для более точного расчета?"
+            )
+
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="Да", callback_data="add_openings")],
+                [InlineKeyboardButton(text="Нет", callback_data="skip_openings")]
+            ])
+
+            await message.answer(result, reply_markup=keyboard)
+        elif data["room_shape"] == RoomShape.CIRCULAR.name:
+            diameter = data["diameter"]
+            radius = diameter / 2
+            floor_area = 3.14159 * radius * radius
+            wall_area = 3.14159 * diameter * height
+            volume = floor_area * height
+
+            result = (
+                f"📊 Результаты расчета для круглого помещения:\n\n"
+                f"📏 Площадь пола: {floor_area:.2f} м²\n"
+                f"🏗 Площадь стен (без учета окон и дверей): {wall_area:.2f} м²\n"
+                f"📦 Объем помещения: {volume:.2f} м³\n\n"
+                f"❓ Хотите указать размеры окон и дверей для более точного расчета?"
+            )
+
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="Да", callback_data="add_openings")],
+                [InlineKeyboardButton(text="Нет", callback_data="skip_openings")]
+            ])
+
+            await message.answer(result, reply_markup=keyboard)
+
+        await state.set_state(AreaCalculatorStates.waiting_for_windows)
+    except ValueError:
+        await message.answer("Пожалуйста, введите корректное положительное число.")
+
+# Обработчики кнопок для окон и дверей
+@dp.callback_query(lambda c: c.data == "add_openings")
+async def process_add_openings(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await callback.message.answer(
+        "Введите количество окон в помещении (если окон нет, введите 0):"
+    )
+    await state.set_state(AreaCalculatorStates.waiting_for_windows)
+
+@dp.callback_query(lambda c: c.data == "skip_openings")
+async def process_skip_openings(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await callback.message.answer(
+        "Расчет завершен! Вы можете начать новый расчет или выбрать другое действие:",
+        reply_markup=keyboard
+    )
+    await state.clear()
+
+# Обработчик ввода диаметра для круглого помещения
+@dp.message(AreaCalculatorStates.waiting_for_diameter)
+async def process_diameter(message: types.Message, state: FSMContext):
+    try:
+        diameter = float(message.text)
+        if diameter <= 0:
+            raise ValueError("Диаметр должен быть положительным числом")
+
+        await state.update_data(diameter=diameter)
+        await message.answer("Введите высоту потолков в метрах:")
+        await state.set_state(AreaCalculatorStates.waiting_for_height)
+    except ValueError:
+        await message.answer("Пожалуйста, введите корректное положительное число.")
+
+
 # Обработчик кнопки "Материалы"
 @dp.message(F.text == "📋 Материалы")
 async def materials_button(message: types.Message):
     await message.answer("📦 Выберите категорию материалов:", reply_markup=get_categories_keyboard())
 
-# Калькулятор площади
-@dp.message(F.text == "📐 Калькулятор площади")
-async def area_calculator(message: types.Message, state: FSMContext):
-    await message.answer("Введите длину помещения в метрах:")
-    await state.set_state(CalcStates.waiting_for_length)
-
-@dp.message(CalcStates.waiting_for_length)
-async def process_length(message: types.Message, state: FSMContext):
-    try:
-        length = float(message.text)
-        await state.update_data(length=length)
-        await message.answer("Введите ширину помещения в метрах:")
-        await state.set_state(CalcStates.waiting_for_width)
-    except ValueError:
-        await message.answer("Пожалуйста, введите корректное число!")
-
-@dp.message(CalcStates.waiting_for_width)
-async def process_width(message: types.Message, state: FSMContext):
-    try:
-        width = float(message.text)
-        data = await state.get_data()
-        length = data.get("length")
-        area = length * width
-        await message.answer(f"Площадь помещения: {area:.2f} м²")
-        await state.clear()
-    except ValueError:
-        await message.answer("Пожалуйста, введите корректное число!")
-
 # Калькулятор бюджета
 @dp.message(F.text == "💰 Калькулятор бюджета")
 async def budget_calculator(message: types.Message, state: FSMContext):
     await message.answer("Введите ваш бюджет в рублях:")
-    await state.set_state(CalcStates.waiting_for_budget)
+    await state.set_state(BudgetCalculatorStates.waiting_for_budget)
 
-@dp.message(CalcStates.waiting_for_budget)
+@dp.message(BudgetCalculatorStates.waiting_for_budget)
 async def process_budget(message: types.Message, state: FSMContext):
     try:
         budget = float(message.text)
@@ -204,6 +378,33 @@ async def back_to_subcategories_callback(callback: types.CallbackQuery):
 async def main_menu_callback(callback: types.CallbackQuery):
     await callback.answer()
     await callback.message.edit_text("👋 Добро пожаловать! Выберите действие:", reply_markup=keyboard)
+
+# Клавиатура категорий
+def get_categories_keyboard():
+    buttons = []
+    for category in materials:
+        buttons.append([InlineKeyboardButton(text=category, callback_data=f"category:{category}")])
+    buttons.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+# Клавиатура подкатегорий
+def get_subcategories_keyboard(category):
+    buttons = []
+    for subcategory in materials[category]:
+        buttons.append([InlineKeyboardButton(text=subcategory, callback_data=f"subcategory:{category}:{subcategory}")])
+    buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_categories")])
+    buttons.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+# Клавиатура брендов
+def get_brands_keyboard(category, subcategory):
+    buttons = []
+    for brand in materials[category][subcategory]["brands"]:
+        buttons.append([InlineKeyboardButton(text=brand, callback_data=f"brand:{category}:{subcategory}:{brand}")])
+    buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data=f"back_to_subcategories:{category}")])
+    buttons.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
 
 # Создаем экземпляр AI помощника
 ai_helper = AIHelper()
