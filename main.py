@@ -448,8 +448,10 @@ async def process_ai_question(message: types.Message, state: FSMContext):
 
 # Запуск бота
 async def main():
+    # Clear any existing webhook and drop pending updates
     await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+    # Set allowed_updates to empty list to minimize conflicts
+    await dp.start_polling(bot, allowed_updates=[])
 
 if __name__ == "__main__":
     asyncio.run(main())
