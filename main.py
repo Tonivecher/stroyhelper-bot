@@ -11,9 +11,11 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 from ai_helper import AIHelper
+from material_calculator import MaterialCalculation, MaterialUnit
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Dict, Union
+import shopping_list
 
 # Типы помещений
 class RoomType(Enum):
@@ -97,24 +99,41 @@ with open("materials.json", "r", encoding="utf-8") as file:
 # Главное меню
 keyboard = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="📋 Материалы")],
-        [KeyboardButton(text="📐 Калькулятор площади")],
-        [KeyboardButton(text="💰 Калькулятор бюджета")],
-        [KeyboardButton(text="🧮 Калькулятор стоимости")],
-        [KeyboardButton(text="🤖 AI Помощник")]
+        [KeyboardButton(text="📋 Материалы"), KeyboardButton(text="📐 Калькулятор площади"), KeyboardButton(text="💰 Калькулятор бюджета")],
+        [KeyboardButton(text="🧮 Калькулятор стоимости"), KeyboardButton(text="🛒 Список покупок"), KeyboardButton(text="🤖 AI Помощник")]
     ],
     resize_keyboard=True
 )
 
 # Клавиатура для выбора типа помещения
 def get_room_type_keyboard():
-    buttons = [[KeyboardButton(text=room_type.value)] for room_type in RoomType]
+    buttons = []
+    room_types = list(RoomType)
+    
+    # Группируем кнопки по две в ряд
+    for i in range(0, len(room_types), 2):
+        row = []
+        row.append(KeyboardButton(text=room_types[i].value))
+        if i + 1 < len(room_types):
+            row.append(KeyboardButton(text=room_types[i + 1].value))
+        buttons.append(row)
+        
     buttons.append([KeyboardButton(text="🔙 Назад в меню")])
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 # Клавиатура для выбора формы помещения
 def get_room_shape_keyboard():
-    buttons = [[KeyboardButton(text=shape.value)] for shape in RoomShape]
+    buttons = []
+    shapes = list(RoomShape)
+    
+    # Группируем кнопки по две в ряд
+    for i in range(0, len(shapes), 2):
+        row = []
+        row.append(KeyboardButton(text=shapes[i].value))
+        if i + 1 < len(shapes):
+            row.append(KeyboardButton(text=shapes[i + 1].value))
+        buttons.append(row)
+        
     buttons.append([KeyboardButton(text="🔙 Назад в меню")])
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
@@ -400,8 +419,16 @@ async def main_menu_callback(callback: types.CallbackQuery):
 # Клавиатура категорий
 def get_categories_keyboard():
     buttons = []
-    for category in materials:
-        buttons.append([InlineKeyboardButton(text=category, callback_data=f"category:{category}")])
+    categories = list(materials.keys())
+    
+    # Группируем кнопки по две в ряд
+    for i in range(0, len(categories), 2):
+        row = []
+        row.append(InlineKeyboardButton(text=categories[i], callback_data=f"category:{categories[i]}"))
+        if i + 1 < len(categories):
+            row.append(InlineKeyboardButton(text=categories[i + 1], callback_data=f"category:{categories[i + 1]}"))
+        buttons.append(row)
+        
     buttons.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -427,7 +454,44 @@ def get_brands_keyboard(category, subcategory):
 # Создаем экземпляр AI помощника
 ai_helper = AIHelper()
 
-# Добавляем обработчик для AI помощника
+# Добавляем обработчик для списка покупок
+@dp.message(F.text == "🛒 Список покупок")
+async def shopping_list_menu(message: types.Message):
+    shopping_keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📝 Показать список"), KeyboardButton(text="➕ Добавить товар")],
+            [KeyboardButton(text="➖ Удалить товар"), KeyboardButton(text="🔙 Назад в меню")]
+        ],
+        resize_keyboard=True
+    )
+    
+    await message.answer("Управление списком покупок:\n\n"
+                        "📝 Показать список - просмотр текущего списка покупок\n"
+                        "➕ Добавить товар - добавление материала в список\n"
+                        "➖ Удалить товар - удаление материала из списка", 
+                        reply_markup=shopping_keyboard)
+
+@dp.message(F.text == "📝 Показать список")
+async def show_shopping_list(message: types.Message):
+    await shopping_list.cmd_shopping_list(message)
+
+@dp.message(F.text == "➕ Добавить товар")
+async def add_to_shopping_list(message: types.Message):
+    await shopping_list.cmd_add_to_list(message)
+
+@dp.message(F.text == "➖ Удалить товар")
+async def remove_from_shopping_list(message: types.Message):
+    await shopping_list.cmd_remove_from_list(message)
+
+# Обработчики состояний для списка покупок
+@dp.callback_query(lambda c: c.data and c.data.startswith("select_"))
+async def callback_select_material(callback_query: types.CallbackQuery, state: FSMContext):
+    await shopping_list.process_select_material(callback_query, state)
+
+@dp.message(shopping_list.ShoppingListStates.waiting_for_quantity)
+async def handle_quantity(message: types.Message, state: FSMContext):
+    await shopping_list.process_quantity(message, state)
+
 @dp.message(F.text == "🤖 AI Помощник")
 async def ai_helper_start(message: types.Message, state: FSMContext):
     keyboard = ReplyKeyboardMarkup(
@@ -452,8 +516,23 @@ async def process_ai_question(message: types.Message, state: FSMContext):
     await state.clear()
 
 
+# Обработчики callback-запросов для списка покупок
+@dp.callback_query(lambda c: c.data and c.data.startswith("remove_"))
+async def callback_remove_from_list(callback_query: types.CallbackQuery):
+    item = callback_query.data.split("remove_")[1]
+    shopping_list.remove_from_list(callback_query.from_user.id, item)
+    await callback_query.answer(f"❌ {item} удален из списка.", show_alert=True)
+    
+@dp.callback_query(lambda c: c.data == "clear_list")
+async def callback_clear_list(callback_query: types.CallbackQuery):
+    shopping_list.clear_list(callback_query.from_user.id)
+    await callback_query.answer("🗑 Ваш список покупок очищен.", show_alert=True)
+
 # Запуск бота
 async def main():
+    # Регистрация маршрутизатора для списка покупок
+    dp.include_router(shopping_list.router)
+    
     # Clear any existing webhook and drop pending updates
     await bot.delete_webhook(drop_pending_updates=True)
     # Set allowed_updates to empty list to minimize conflicts
