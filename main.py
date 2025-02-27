@@ -142,12 +142,29 @@ def get_room_shape_keyboard():
 @dp.message(F.text == "🔙 Назад в меню")
 async def back_to_menu(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("👋 Выберите действие:", reply_markup=keyboard)
+    # Используем глобальную клавиатуру с правильной структурой
+    main_keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📋 Материалы"), KeyboardButton(text="📐 Калькулятор площади")],
+            [KeyboardButton(text="💰 Калькулятор бюджета"), KeyboardButton(text="🧮 Калькулятор стоимости")],
+            [KeyboardButton(text="🛒 Список покупок"), KeyboardButton(text="🤖 AI Помощник")]
+        ],
+        resize_keyboard=True
+    )
+    await message.answer("👋 Выберите действие:", reply_markup=main_keyboard)
 
 # Команда /start
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
-    await message.answer("👋 Привет! Я StroyHelper бот. Выберите действие:", reply_markup=keyboard)
+    main_keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📋 Материалы"), KeyboardButton(text="📐 Калькулятор площади")],
+            [KeyboardButton(text="💰 Калькулятор бюджета"), KeyboardButton(text="🧮 Калькулятор стоимости")],
+            [KeyboardButton(text="🛒 Список покупок"), KeyboardButton(text="🤖 AI Помощник")]
+        ],
+        resize_keyboard=True
+    )
+    await message.answer("👋 Привет! Я StroyHelper бот. Выберите действие:", reply_markup=main_keyboard)
 
 # Обработчик кнопки "Калькулятор площади"
 @dp.message(F.text == "📐 Калькулятор площади")
@@ -300,9 +317,17 @@ async def process_add_openings(callback: types.CallbackQuery, state: FSMContext)
 @dp.callback_query(lambda c: c.data == "skip_openings")
 async def process_skip_openings(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
+    main_keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📋 Материалы"), KeyboardButton(text="📐 Калькулятор площади")],
+            [KeyboardButton(text="💰 Калькулятор бюджета"), KeyboardButton(text="🧮 Калькулятор стоимости")],
+            [KeyboardButton(text="🛒 Список покупок"), KeyboardButton(text="🤖 AI Помощник")]
+        ],
+        resize_keyboard=True
+    )
     await callback.message.answer(
         "Расчет завершен! Вы можете начать новый расчет или выбрать другое действие:",
-        reply_markup=keyboard
+        reply_markup=main_keyboard
     )
     await state.clear()
 
@@ -415,7 +440,19 @@ async def back_to_subcategories_callback(callback: types.CallbackQuery):
 @dp.callback_query(F.data == "main_menu")
 async def main_menu_callback(callback: types.CallbackQuery):
     await callback.answer()
-    await callback.message.edit_text("👋 Добро пожаловать! Выберите действие:", reply_markup=keyboard)
+    # Используем ReplyKeyboardMarkup вместо InlineKeyboardMarkup для главного меню
+    main_keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📋 Материалы"), KeyboardButton(text="📐 Калькулятор площади")],
+            [KeyboardButton(text="💰 Калькулятор бюджета"), KeyboardButton(text="🧮 Калькулятор стоимости")],
+            [KeyboardButton(text="🛒 Список покупок"), KeyboardButton(text="🤖 AI Помощник")]
+        ],
+        resize_keyboard=True
+    )
+    # Удаляем старое сообщение с inline-клавиатурой
+    await callback.message.delete()
+    # Отправляем новое сообщение с reply-клавиатурой
+    await callback.message.answer("👋 Добро пожаловать! Выберите действие:", reply_markup=main_keyboard)
 
 # Клавиатура категорий
 def get_categories_keyboard():
