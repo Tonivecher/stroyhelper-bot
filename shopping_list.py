@@ -34,8 +34,17 @@ MATERIAL_UNITS = {
 def load_shopping_list():
     if not os.path.exists(SHOPPING_LIST_FILE):
         return {}
-    with open(SHOPPING_LIST_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(SHOPPING_LIST_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            # Проверка структуры данных и исправление, если необходимо
+            for user_id in data:
+                if isinstance(data[user_id], list):
+                    data[user_id] = {"lists": {}}
+            return data
+    except json.JSONDecodeError:
+        # В случае ошибки декодирования JSON, вернем пустой словарь
+        return {}
 
 # Функция сохранения списков покупок
 def save_shopping_list(data):
@@ -84,8 +93,18 @@ def get_user_lists(user_id):
     data = load_shopping_list()
     user_id = str(user_id)
     
-    if user_id not in data or "lists" not in data[user_id]:
+    if user_id not in data:
         return {}
+    
+    # Проверяем, что data[user_id] - это словарь, а не список
+    if isinstance(data[user_id], list):
+        # Если это список, преобразуем его в словарь
+        data[user_id] = {"lists": {}}
+        save_shopping_list(data)
+    
+    if "lists" not in data[user_id]:
+        data[user_id]["lists"] = {}
+        save_shopping_list(data)
     
     return data[user_id]["lists"]
 
@@ -105,6 +124,11 @@ def create_list(user_id, list_name):
     user_id = str(user_id)
     
     if user_id not in data:
+        data[user_id] = {"lists": {}}
+    
+    # Проверяем, что data[user_id] - это словарь, а не список
+    if isinstance(data[user_id], list):
+        # Если это список, преобразуем его в словарь
         data[user_id] = {"lists": {}}
     
     if "lists" not in data[user_id]:
