@@ -556,15 +556,34 @@ async def main():
             with open(shopping_list.SHOPPING_LIST_FILE, "w", encoding="utf-8") as f:
                 json.dump({}, f, ensure_ascii=False, indent=4)
         
+        # Создание файла-блокировки для предотвращения запуска нескольких экземпляров
+        if os.path.exists("bot.lock"):
+            logging.warning("Обнаружен файл блокировки. Возможно, бот уже запущен.")
+            try:
+                os.remove("bot.lock")
+                logging.info("Старый файл блокировки удален.")
+            except Exception as e:
+                logging.error(f"Не удалось удалить файл блокировки: {e}")
+
+        # Создаем новый файл блокировки
+        with open("bot.lock", "w") as f:
+            f.write(str(os.getpid()))
+        
         # Clear any existing webhook and drop pending updates
         logging.info("Удаление существующего webhook и сброс обновлений...")
         await bot.delete_webhook(drop_pending_updates=True)
         
-        # Set allowed_updates to empty list to minimize conflicts
+        # Set allowed_updates to specify exactly what updates we want
         logging.info("Запуск поллинга...")
-        await dp.start_polling(bot, allowed_updates=[])
+        await dp.start_polling(
+            bot, 
+            allowed_updates=["message", "callback_query", "inline_query"],
+            skip_updates=True
+        )
     except Exception as e:
         logging.critical(f"Критическая ошибка при запуске бота: {e}", exc_info=True)
+        if os.path.exists("bot.lock"):
+            os.remove("bot.lock")
         exit(1)
 
 
@@ -650,5 +669,39 @@ async def process_material_type(message: types.Message, state: FSMContext):
         )
         await state.clear()
 
+async def on_shutdown():
+    """Функция для корректного завершения работы бота"""
+    logging.info("Завершение работы бота...")
+    # Удаляем файл блокировки при завершении
+    if os.path.exists("bot.lock"):
+        os.remove("bot.lock")
+    logging.info("Бот остановлен.")
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        # Добавляем обработку сигналов для корректного завершения
+        import signal
+        loop = asyncio.get_event_loop()
+        
+        # Функция-обработчик сигналов
+        def signal_handler(sig, frame):
+            logging.info(f"Получен сигнал {sig}, завершение работы...")
+            asyncio.create_task(on_shutdown())
+            loop.stop()
+        
+        # Регистрируем обработчики сигналов
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        
+        # Запускаем бота
+        loop.create_task(main())
+        loop.run_forever()
+    except KeyboardInterrupt:
+        logging.info("Бот остановлен пользователем")
+    except Exception as e:
+        logging.critical(f"Необработанная ошибка: {e}", exc_info=True)
+    finally:
+        # Запускаем событие завершения работы
+        if not loop.is_closed():
+            loop.run_until_complete(on_shutdown())
+            loop.close()
