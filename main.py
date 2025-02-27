@@ -11,9 +11,11 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 from ai_helper import AIHelper
+from material_calculator import MaterialCalculation, MaterialUnit
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Dict, Union
+import shopping_list
 
 # Типы помещений
 class RoomType(Enum):
@@ -101,6 +103,7 @@ keyboard = ReplyKeyboardMarkup(
         [KeyboardButton(text="📐 Калькулятор площади")],
         [KeyboardButton(text="💰 Калькулятор бюджета")],
         [KeyboardButton(text="🧮 Калькулятор стоимости")],
+        [KeyboardButton(text="🛒 Список покупок")],
         [KeyboardButton(text="🤖 AI Помощник")]
     ],
     resize_keyboard=True
@@ -428,6 +431,32 @@ def get_brands_keyboard(category, subcategory):
 ai_helper = AIHelper()
 
 # Добавляем обработчик для AI помощника
+@dp.message(F.text == "🛒 Список покупок")
+async def shopping_list_menu(message: types.Message):
+    shopping_keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📝 Показать список")],
+            [KeyboardButton(text="➕ Добавить товар")],
+            [KeyboardButton(text="➖ Удалить товар")],
+            [KeyboardButton(text="🔙 Назад в меню")]
+        ],
+        resize_keyboard=True
+    )
+    
+    await message.answer("Управление списком покупок:", reply_markup=shopping_keyboard)
+
+@dp.message(F.text == "📝 Показать список")
+async def show_shopping_list(message: types.Message):
+    await shopping_list.cmd_shopping_list(message)
+
+@dp.message(F.text == "➕ Добавить товар")
+async def add_to_shopping_list(message: types.Message):
+    await shopping_list.cmd_add_to_list(message)
+
+@dp.message(F.text == "➖ Удалить товар")
+async def remove_from_shopping_list(message: types.Message):
+    await shopping_list.cmd_remove_from_list(message)
+
 @dp.message(F.text == "🤖 AI Помощник")
 async def ai_helper_start(message: types.Message, state: FSMContext):
     keyboard = ReplyKeyboardMarkup(
@@ -452,8 +481,24 @@ async def process_ai_question(message: types.Message, state: FSMContext):
     await state.clear()
 
 
+# Обработчики callback-запросов для списка покупок
+@dp.callback_query(lambda c: c.data and c.data.startswith("add_"))
+async def callback_add_to_list(callback_query: types.CallbackQuery):
+    await shopping_list.process_add_to_list(callback_query)
+    
+@dp.callback_query(lambda c: c.data and c.data.startswith("remove_"))
+async def callback_remove_from_list(callback_query: types.CallbackQuery):
+    await shopping_list.process_remove_from_list(callback_query)
+    
+@dp.callback_query(lambda c: c.data == "clear_list")
+async def callback_clear_list(callback_query: types.CallbackQuery):
+    await shopping_list.process_clear_list(callback_query)
+
 # Запуск бота
 async def main():
+    # Регистрация маршрутизатора для списка покупок
+    dp.include_router(shopping_list.router)
+    
     # Clear any existing webhook and drop pending updates
     await bot.delete_webhook(drop_pending_updates=True)
     # Set allowed_updates to empty list to minimize conflicts
