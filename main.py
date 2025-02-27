@@ -99,8 +99,9 @@ with open("materials.json", "r", encoding="utf-8") as file:
 # Главное меню
 keyboard = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="📋 Материалы"), KeyboardButton(text="📐 Калькулятор площади"), KeyboardButton(text="💰 Калькулятор бюджета")],
-        [KeyboardButton(text="🧮 Калькулятор стоимости"), KeyboardButton(text="🛒 Список покупок"), KeyboardButton(text="🤖 AI Помощник")]
+        [KeyboardButton(text="📋 Материалы"), KeyboardButton(text="📐 Калькулятор площади")],
+        [KeyboardButton(text="💰 Калькулятор бюджета"), KeyboardButton(text="🧮 Калькулятор стоимости")],
+        [KeyboardButton(text="🛒 Список покупок"), KeyboardButton(text="🤖 AI Помощник")]
     ],
     resize_keyboard=True
 )
