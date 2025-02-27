@@ -99,25 +99,42 @@ with open("materials.json", "r", encoding="utf-8") as file:
 # Главное меню
 keyboard = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="📋 Материалы")],
-        [KeyboardButton(text="📐 Калькулятор площади")],
-        [KeyboardButton(text="💰 Калькулятор бюджета")],
-        [KeyboardButton(text="🧮 Калькулятор стоимости")],
-        [KeyboardButton(text="🛒 Список покупок")],
-        [KeyboardButton(text="🤖 AI Помощник")]
+        [KeyboardButton(text="📋 Материалы"), KeyboardButton(text="📐 Калькулятор площади")],
+        [KeyboardButton(text="💰 Калькулятор бюджета"), KeyboardButton(text="🧮 Калькулятор стоимости")],
+        [KeyboardButton(text="🛒 Список покупок"), KeyboardButton(text="🤖 AI Помощник")]
     ],
     resize_keyboard=True
 )
 
 # Клавиатура для выбора типа помещения
 def get_room_type_keyboard():
-    buttons = [[KeyboardButton(text=room_type.value)] for room_type in RoomType]
+    buttons = []
+    room_types = list(RoomType)
+    
+    # Группируем кнопки по две в ряд
+    for i in range(0, len(room_types), 2):
+        row = []
+        row.append(KeyboardButton(text=room_types[i].value))
+        if i + 1 < len(room_types):
+            row.append(KeyboardButton(text=room_types[i + 1].value))
+        buttons.append(row)
+        
     buttons.append([KeyboardButton(text="🔙 Назад в меню")])
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 # Клавиатура для выбора формы помещения
 def get_room_shape_keyboard():
-    buttons = [[KeyboardButton(text=shape.value)] for shape in RoomShape]
+    buttons = []
+    shapes = list(RoomShape)
+    
+    # Группируем кнопки по две в ряд
+    for i in range(0, len(shapes), 2):
+        row = []
+        row.append(KeyboardButton(text=shapes[i].value))
+        if i + 1 < len(shapes):
+            row.append(KeyboardButton(text=shapes[i + 1].value))
+        buttons.append(row)
+        
     buttons.append([KeyboardButton(text="🔙 Назад в меню")])
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
@@ -403,8 +420,16 @@ async def main_menu_callback(callback: types.CallbackQuery):
 # Клавиатура категорий
 def get_categories_keyboard():
     buttons = []
-    for category in materials:
-        buttons.append([InlineKeyboardButton(text=category, callback_data=f"category:{category}")])
+    categories = list(materials.keys())
+    
+    # Группируем кнопки по две в ряд
+    for i in range(0, len(categories), 2):
+        row = []
+        row.append(InlineKeyboardButton(text=categories[i], callback_data=f"category:{categories[i]}"))
+        if i + 1 < len(categories):
+            row.append(InlineKeyboardButton(text=categories[i + 1], callback_data=f"category:{categories[i + 1]}"))
+        buttons.append(row)
+        
     buttons.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -435,10 +460,8 @@ ai_helper = AIHelper()
 async def shopping_list_menu(message: types.Message):
     shopping_keyboard = ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="📝 Показать список")],
-            [KeyboardButton(text="➕ Добавить товар")],
-            [KeyboardButton(text="➖ Удалить товар")],
-            [KeyboardButton(text="🔙 Назад в меню")]
+            [KeyboardButton(text="📝 Показать список"), KeyboardButton(text="➕ Добавить товар")],
+            [KeyboardButton(text="➖ Удалить товар"), KeyboardButton(text="🔙 Назад в меню")]
         ],
         resize_keyboard=True
     )
