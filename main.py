@@ -497,13 +497,38 @@ async def process_ai_question(message: types.Message, state: FSMContext):
 
 # Запуск бота
 async def main():
-    # Регистрация маршрутизатора для списка покупок
-    dp.include_router(shopping_list.router)
-    
-    # Clear any existing webhook and drop pending updates
-    await bot.delete_webhook(drop_pending_updates=True)
-    # Set allowed_updates to empty list to minimize conflicts
-    await dp.start_polling(bot, allowed_updates=[])
+    try:
+        logging.info("Запуск бота...")
+        
+        # Регистрация маршрутизатора для списка покупок
+        dp.include_router(shopping_list.router)
+        
+        # Проверка наличия токена
+        if not API_TOKEN:
+            logging.critical("API_TOKEN не установлен! Бот не может запуститься.")
+            exit(1)
+        
+        # Проверка JSON файлов
+        if not os.path.exists("materials.json"):
+            logging.warning("Файл materials.json не найден. Будет создан пустой файл.")
+            with open("materials.json", "w", encoding="utf-8") as f:
+                json.dump({}, f, ensure_ascii=False, indent=4)
+        
+        if not os.path.exists(shopping_list.SHOPPING_LIST_FILE):
+            logging.info(f"Файл {shopping_list.SHOPPING_LIST_FILE} не найден. Будет создан пустой файл.")
+            with open(shopping_list.SHOPPING_LIST_FILE, "w", encoding="utf-8") as f:
+                json.dump({}, f, ensure_ascii=False, indent=4)
+        
+        # Clear any existing webhook and drop pending updates
+        logging.info("Удаление существующего webhook и сброс обновлений...")
+        await bot.delete_webhook(drop_pending_updates=True)
+        
+        # Set allowed_updates to empty list to minimize conflicts
+        logging.info("Запуск поллинга...")
+        await dp.start_polling(bot, allowed_updates=[])
+    except Exception as e:
+        logging.critical(f"Критическая ошибка при запуске бота: {e}", exc_info=True)
+        exit(1)
 
 
 # Обработчик калькулятора стоимости материалов

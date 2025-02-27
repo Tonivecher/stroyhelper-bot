@@ -1,11 +1,16 @@
 
 import json
 import os
+import logging
 from aiogram import Router, types
 from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 router = Router()
 
@@ -221,6 +226,12 @@ async def process_list_name(message: Message, state: FSMContext):
         return
     
     try:
+        logger.info(f"Попытка создания списка '{list_name}' пользователем {message.from_user.id}")
+        
+        # Проверим текущую структуру данных
+        current_data = load_shopping_list()
+        logger.info(f"Текущие данные для пользователя {message.from_user.id}: {current_data.get(str(message.from_user.id), {})}")
+        
         created = create_list(message.from_user.id, list_name)
         
         if created:
@@ -231,7 +242,7 @@ async def process_list_name(message: Message, state: FSMContext):
         await state.clear()
         await show_lists_menu(message)
     except Exception as e:
-        logging.error(f"Ошибка при создании списка: {e}")
+        logger.error(f"Ошибка при создании списка: {e}", exc_info=True)
         await message.answer("Произошла ошибка при создании списка. Пожалуйста, попробуйте еще раз.")
         await state.clear()
 
