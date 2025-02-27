@@ -465,7 +465,11 @@ async def shopping_list_menu(message: types.Message):
         resize_keyboard=True
     )
     
-    await message.answer("Управление списком покупок:", reply_markup=shopping_keyboard)
+    await message.answer("Управление списком покупок:\n\n"
+                        "📝 Показать список - просмотр текущего списка покупок\n"
+                        "➕ Добавить товар - добавление материала в список\n"
+                        "➖ Удалить товар - удаление материала из списка", 
+                        reply_markup=shopping_keyboard)
 
 @dp.message(F.text == "📝 Показать список")
 async def show_shopping_list(message: types.Message):
@@ -513,17 +517,16 @@ async def process_ai_question(message: types.Message, state: FSMContext):
 
 
 # Обработчики callback-запросов для списка покупок
-@dp.callback_query(lambda c: c.data and c.data.startswith("add_"))
-async def callback_add_to_list(callback_query: types.CallbackQuery):
-    await shopping_list.process_add_to_list(callback_query)
-    
 @dp.callback_query(lambda c: c.data and c.data.startswith("remove_"))
 async def callback_remove_from_list(callback_query: types.CallbackQuery):
-    await shopping_list.process_remove_from_list(callback_query)
+    item = callback_query.data.split("remove_")[1]
+    shopping_list.remove_from_list(callback_query.from_user.id, item)
+    await callback_query.answer(f"❌ {item} удален из списка.", show_alert=True)
     
 @dp.callback_query(lambda c: c.data == "clear_list")
 async def callback_clear_list(callback_query: types.CallbackQuery):
-    await shopping_list.process_clear_list(callback_query)
+    shopping_list.clear_list(callback_query.from_user.id)
+    await callback_query.answer("🗑 Ваш список покупок очищен.", show_alert=True)
 
 # Запуск бота
 async def main():
