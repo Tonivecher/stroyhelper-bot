@@ -65,6 +65,11 @@ class BudgetCalculatorStates(StatesGroup):
     waiting_for_budget = State()
     waiting_for_material = State()
 
+class MaterialCalculatorStates(StatesGroup):
+    waiting_for_area = State()
+    waiting_for_material_type = State()
+    waiting_for_discount = State()
+
 # Состояния для AI чата
 class AIStates(StatesGroup):
     waiting_for_question = State()
@@ -95,6 +100,7 @@ keyboard = ReplyKeyboardMarkup(
         [KeyboardButton(text="📋 Материалы")],
         [KeyboardButton(text="📐 Калькулятор площади")],
         [KeyboardButton(text="💰 Калькулятор бюджета")],
+        [KeyboardButton(text="🧮 Калькулятор стоимости")],
         [KeyboardButton(text="🤖 AI Помощник")]
     ],
     resize_keyboard=True
@@ -452,6 +458,89 @@ async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     # Set allowed_updates to empty list to minimize conflicts
     await dp.start_polling(bot, allowed_updates=[])
+
+
+# Обработчик калькулятора стоимости материалов
+@dp.message(F.text == "🧮 Калькулятор стоимости")
+async def material_calculator_start(message: types.Message, state: FSMContext):
+    await message.answer(
+        "Введите площадь помещения в квадратных метрах:",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="🔙 Назад в меню")]],
+            resize_keyboard=True
+        )
+    )
+    await state.set_state(MaterialCalculatorStates.waiting_for_area)
+
+@dp.message(MaterialCalculatorStates.waiting_for_area)
+async def process_area(message: types.Message, state: FSMContext):
+    try:
+        area = float(message.text)
+        if area <= 0:
+            raise ValueError("Площадь должна быть положительным числом")
+        
+        await state.update_data(area=area)
+        
+        # Создаем клавиатуру с доступными материалами
+        material_buttons = []
+        for category in materials:
+            for material in materials[category]:
+                if "price" in materials[category][material]:
+                    material_buttons.append([KeyboardButton(text=f"{category} - {material}")])
+        
+        material_buttons.append([KeyboardButton(text="🔙 Назад в меню")])
+        material_keyboard = ReplyKeyboardMarkup(keyboard=material_buttons, resize_keyboard=True)
+        
+        await message.answer(
+            "Выберите материал для расчета:",
+            reply_markup=material_keyboard
+        )
+        await state.set_state(MaterialCalculatorStates.waiting_for_material_type)
+        
+    except ValueError:
+        await message.answer("Пожалуйста, введите корректное число!")
+
+@dp.message(MaterialCalculatorStates.waiting_for_material_type)
+async def process_material_type(message: types.Message, state: FSMContext):
+    if message.text == "🔙 Назад в меню":
+        await back_to_menu(message, state)
+        return
+
+    try:
+        category, material = message.text.split(" - ")
+        data = await state.get_data()
+        area = data["area"]
+        
+        material_info = materials[category][material]
+        price = material_info["price"]
+        
+        calculator = MaterialCalculation(
+            area=area,
+            price_per_unit=price,
+            unit=MaterialUnit.SQUARE_METER
+        )
+        
+        result = calculator.calculate()
+        
+        response = (
+            f"📊 Расчет стоимости материалов:\n\n"
+            f"🏗 Материал: {material}\n"
+            f"📏 Площадь: {area} м²\n"
+            f"💵 Цена за м²: {price} руб\n"
+            f"📦 Необходимое количество: {result['amount']} м²\n"
+            f"💰 Общая стоимость: {result['total_cost']} руб\n\n"
+            f"* Учтен запас {calculator.waste_percent}% на подрезку"
+        )
+        
+        await message.answer(response, reply_markup=keyboard)
+        await state.clear()
+        
+    except (ValueError, KeyError):
+        await message.answer(
+            "Произошла ошибка при расчете. Пожалуйста, выберите материал из списка.",
+            reply_markup=keyboard
+        )
+        await state.clear()
 
 if __name__ == "__main__":
     asyncio.run(main())
