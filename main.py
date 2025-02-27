@@ -454,7 +454,7 @@ def get_brands_keyboard(category, subcategory):
 # Создаем экземпляр AI помощника
 ai_helper = AIHelper()
 
-# Добавляем обработчик для AI помощника
+# Добавляем обработчик для списка покупок
 @dp.message(F.text == "🛒 Список покупок")
 async def shopping_list_menu(message: types.Message):
     shopping_keyboard = ReplyKeyboardMarkup(
@@ -478,6 +478,15 @@ async def add_to_shopping_list(message: types.Message):
 @dp.message(F.text == "➖ Удалить товар")
 async def remove_from_shopping_list(message: types.Message):
     await shopping_list.cmd_remove_from_list(message)
+
+# Обработчики состояний для списка покупок
+@dp.callback_query(lambda c: c.data and c.data.startswith("select_"))
+async def callback_select_material(callback_query: types.CallbackQuery, state: FSMContext):
+    await shopping_list.process_select_material(callback_query, state)
+
+@dp.message(shopping_list.ShoppingListStates.waiting_for_quantity)
+async def handle_quantity(message: types.Message, state: FSMContext):
+    await shopping_list.process_quantity(message, state)
 
 @dp.message(F.text == "🤖 AI Помощник")
 async def ai_helper_start(message: types.Message, state: FSMContext):
