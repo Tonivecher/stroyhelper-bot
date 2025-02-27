@@ -99,8 +99,9 @@ with open("materials.json", "r", encoding="utf-8") as file:
 # Главное меню
 keyboard = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="📋 Материалы"), KeyboardButton(text="📐 Калькулятор площади"), KeyboardButton(text="💰 Калькулятор бюджета")],
-        [KeyboardButton(text="🧮 Калькулятор стоимости"), KeyboardButton(text="🛒 Список покупок"), KeyboardButton(text="🤖 AI Помощник")]
+        [KeyboardButton(text="📋 Материалы"), KeyboardButton(text="📐 Калькулятор площади")],
+        [KeyboardButton(text="💰 Калькулятор бюджета"), KeyboardButton(text="🧮 Калькулятор стоимости")],
+        [KeyboardButton(text="🛒 Список покупок"), KeyboardButton(text="🤖 AI Помощник")]
     ],
     resize_keyboard=True
 )
@@ -141,12 +142,29 @@ def get_room_shape_keyboard():
 @dp.message(F.text == "🔙 Назад в меню")
 async def back_to_menu(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("👋 Выберите действие:", reply_markup=keyboard)
+    # Используем глобальную клавиатуру с правильной структурой
+    main_keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📋 Материалы"), KeyboardButton(text="📐 Калькулятор площади")],
+            [KeyboardButton(text="💰 Калькулятор бюджета"), KeyboardButton(text="🧮 Калькулятор стоимости")],
+            [KeyboardButton(text="🛒 Список покупок"), KeyboardButton(text="🤖 AI Помощник")]
+        ],
+        resize_keyboard=True
+    )
+    await message.answer("👋 Выберите действие:", reply_markup=main_keyboard)
 
 # Команда /start
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
-    await message.answer("👋 Привет! Я StroyHelper бот. Выберите действие:", reply_markup=keyboard)
+    main_keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📋 Материалы"), KeyboardButton(text="📐 Калькулятор площади")],
+            [KeyboardButton(text="💰 Калькулятор бюджета"), KeyboardButton(text="🧮 Калькулятор стоимости")],
+            [KeyboardButton(text="🛒 Список покупок"), KeyboardButton(text="🤖 AI Помощник")]
+        ],
+        resize_keyboard=True
+    )
+    await message.answer("👋 Привет! Я StroyHelper бот. Выберите действие:", reply_markup=main_keyboard)
 
 # Обработчик кнопки "Калькулятор площади"
 @dp.message(F.text == "📐 Калькулятор площади")
@@ -299,9 +317,17 @@ async def process_add_openings(callback: types.CallbackQuery, state: FSMContext)
 @dp.callback_query(lambda c: c.data == "skip_openings")
 async def process_skip_openings(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
+    main_keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📋 Материалы"), KeyboardButton(text="📐 Калькулятор площади")],
+            [KeyboardButton(text="💰 Калькулятор бюджета"), KeyboardButton(text="🧮 Калькулятор стоимости")],
+            [KeyboardButton(text="🛒 Список покупок"), KeyboardButton(text="🤖 AI Помощник")]
+        ],
+        resize_keyboard=True
+    )
     await callback.message.answer(
         "Расчет завершен! Вы можете начать новый расчет или выбрать другое действие:",
-        reply_markup=keyboard
+        reply_markup=main_keyboard
     )
     await state.clear()
 
@@ -414,7 +440,19 @@ async def back_to_subcategories_callback(callback: types.CallbackQuery):
 @dp.callback_query(F.data == "main_menu")
 async def main_menu_callback(callback: types.CallbackQuery):
     await callback.answer()
-    await callback.message.edit_text("👋 Добро пожаловать! Выберите действие:", reply_markup=keyboard)
+    # Используем ReplyKeyboardMarkup вместо InlineKeyboardMarkup для главного меню
+    main_keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📋 Материалы"), KeyboardButton(text="📐 Калькулятор площади")],
+            [KeyboardButton(text="💰 Калькулятор бюджета"), KeyboardButton(text="🧮 Калькулятор стоимости")],
+            [KeyboardButton(text="🛒 Список покупок"), KeyboardButton(text="🤖 AI Помощник")]
+        ],
+        resize_keyboard=True
+    )
+    # Удаляем старое сообщение с inline-клавиатурой
+    await callback.message.delete()
+    # Отправляем новое сообщение с reply-клавиатурой
+    await callback.message.answer("👋 Добро пожаловать! Выберите действие:", reply_markup=main_keyboard)
 
 # Клавиатура категорий
 def get_categories_keyboard():
@@ -496,13 +534,57 @@ async def process_ai_question(message: types.Message, state: FSMContext):
 
 # Запуск бота
 async def main():
-    # Регистрация маршрутизатора для списка покупок
-    dp.include_router(shopping_list.router)
-    
-    # Clear any existing webhook and drop pending updates
-    await bot.delete_webhook(drop_pending_updates=True)
-    # Set allowed_updates to empty list to minimize conflicts
-    await dp.start_polling(bot, allowed_updates=[])
+    try:
+        logging.info("Запуск бота...")
+        
+        # Регистрация маршрутизатора для списка покупок
+        dp.include_router(shopping_list.router)
+        
+        # Проверка наличия токена
+        if not API_TOKEN:
+            logging.critical("API_TOKEN не установлен! Бот не может запуститься.")
+            exit(1)
+        
+        # Проверка JSON файлов
+        if not os.path.exists("materials.json"):
+            logging.warning("Файл materials.json не найден. Будет создан пустой файл.")
+            with open("materials.json", "w", encoding="utf-8") as f:
+                json.dump({}, f, ensure_ascii=False, indent=4)
+        
+        if not os.path.exists(shopping_list.SHOPPING_LIST_FILE):
+            logging.info(f"Файл {shopping_list.SHOPPING_LIST_FILE} не найден. Будет создан пустой файл.")
+            with open(shopping_list.SHOPPING_LIST_FILE, "w", encoding="utf-8") as f:
+                json.dump({}, f, ensure_ascii=False, indent=4)
+        
+        # Создание файла-блокировки для предотвращения запуска нескольких экземпляров
+        if os.path.exists("bot.lock"):
+            logging.warning("Обнаружен файл блокировки. Возможно, бот уже запущен.")
+            try:
+                os.remove("bot.lock")
+                logging.info("Старый файл блокировки удален.")
+            except Exception as e:
+                logging.error(f"Не удалось удалить файл блокировки: {e}")
+
+        # Создаем новый файл блокировки
+        with open("bot.lock", "w") as f:
+            f.write(str(os.getpid()))
+        
+        # Clear any existing webhook and drop pending updates
+        logging.info("Удаление существующего webhook и сброс обновлений...")
+        await bot.delete_webhook(drop_pending_updates=True)
+        
+        # Set allowed_updates to specify exactly what updates we want
+        logging.info("Запуск поллинга...")
+        await dp.start_polling(
+            bot, 
+            allowed_updates=["message", "callback_query", "inline_query"],
+            skip_updates=True
+        )
+    except Exception as e:
+        logging.critical(f"Критическая ошибка при запуске бота: {e}", exc_info=True)
+        if os.path.exists("bot.lock"):
+            os.remove("bot.lock")
+        exit(1)
 
 
 # Обработчик калькулятора стоимости материалов
@@ -587,5 +669,39 @@ async def process_material_type(message: types.Message, state: FSMContext):
         )
         await state.clear()
 
+async def on_shutdown():
+    """Функция для корректного завершения работы бота"""
+    logging.info("Завершение работы бота...")
+    # Удаляем файл блокировки при завершении
+    if os.path.exists("bot.lock"):
+        os.remove("bot.lock")
+    logging.info("Бот остановлен.")
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        # Добавляем обработку сигналов для корректного завершения
+        import signal
+        loop = asyncio.get_event_loop()
+        
+        # Функция-обработчик сигналов
+        def signal_handler(sig, frame):
+            logging.info(f"Получен сигнал {sig}, завершение работы...")
+            asyncio.create_task(on_shutdown())
+            loop.stop()
+        
+        # Регистрируем обработчики сигналов
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        
+        # Запускаем бота
+        loop.create_task(main())
+        loop.run_forever()
+    except KeyboardInterrupt:
+        logging.info("Бот остановлен пользователем")
+    except Exception as e:
+        logging.critical(f"Необработанная ошибка: {e}", exc_info=True)
+    finally:
+        # Запускаем событие завершения работы
+        if not loop.is_closed():
+            loop.run_until_complete(on_shutdown())
+            loop.close()

@@ -1,11 +1,16 @@
 
 import json
 import os
+import logging
 from aiogram import Router, types
 from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 router = Router()
 
@@ -220,46 +225,65 @@ async def process_list_name(message: Message, state: FSMContext):
         await message.answer("Название списка не может быть пустым. Попробуйте еще раз:")
         return
     
-    created = create_list(message.from_user.id, list_name)
-    
-    if created:
-        await message.answer(f"✅ Список \"{list_name}\" создан успешно!")
-    else:
-        await message.answer(f"⚠️ Список с названием \"{list_name}\" уже существует.")
-    
-    await state.clear()
-    await show_lists_menu(message)
+    try:
+        logger.info(f"Попытка создания списка '{list_name}' пользователем {message.from_user.id}")
+        
+        # Проверим текущую структуру данных
+        current_data = load_shopping_list()
+        logger.info(f"Текущие данные для пользователя {message.from_user.id}: {current_data.get(str(message.from_user.id), {})}")
+        
+        created = create_list(message.from_user.id, list_name)
+        
+        if created:
+            await message.answer(f"✅ Список \"{list_name}\" создан успешно!")
+        else:
+            await message.answer(f"⚠️ Список с названием \"{list_name}\" уже существует.")
+        
+        await state.clear()
+        await show_lists_menu(message)
+    except Exception as e:
+        logger.error(f"Ошибка при создании списка: {e}", exc_info=True)
+        await message.answer("Произошла ошибка при создании списка. Пожалуйста, попробуйте еще раз.")
+        await state.clear()
 
 # Обработчик открытия списка
 @router.callback_query(lambda c: c.data and c.data.startswith("open_list:"))
 async def process_open_list(callback_query: types.CallbackQuery, state: FSMContext):
-    list_name = callback_query.data.split(":")[1]
-    items = get_list(callback_query.from_user.id, list_name)
-    
-    await callback_query.answer()
-    
-    if not items:
-        text = f"📋 Список \"{list_name}\" пуст."
-    else:
-        text = f"📋 Список \"{list_name}\":\n"
-        for item in items:
-            if isinstance(item, dict):
-                text += f"• {item['item']} - {item['quantity']} {item['unit']}\n"
-            else:
-                text += f"• {item}\n"
-    
-    # Кнопки управления списком
-    buttons = [
-        [InlineKeyboardButton(text="➕ Добавить товар", callback_data=f"add_to_list:{list_name}")],
-        [InlineKeyboardButton(text="➖ Удалить товар", callback_data=f"remove_from_list:{list_name}")],
-        [InlineKeyboardButton(text="🗑 Очистить список", callback_data=f"clear_list:{list_name}")],
-        [InlineKeyboardButton(text="❌ Удалить список", callback_data=f"delete_list:{list_name}")],
-        [InlineKeyboardButton(text="🔙 К списку списков", callback_data="back_to_lists")]
-    ]
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-    
-    await callback_query.message.edit_text(text, reply_markup=keyboard)
+    try:
+        list_name = callback_query.data.split(":")[1]
+        items = get_list(callback_query.from_user.id, list_name)
+        
+        await callback_query.answer()
+        
+        if not items:
+            text = f"📋 Список \"{list_name}\" пуст."
+        else:
+            text = f"📋 Список \"{list_name}\":\n"
+            for item in items:
+                if isinstance(item, dict) and 'item' in item and 'quantity' in item and 'unit' in item:
+                    text += f"• {item['item']} - {item['quantity']} {item['unit']}\n"
+                elif isinstance(item, str):
+                    text += f"• {item}\n"
+                else:
+                    # Обработка некорректного формата элемента
+                    text += f"• [Элемент в неправильном формате]\n"
+        
+        # Кнопки управления списком
+        buttons = [
+            [InlineKeyboardButton(text="➕ Добавить товар", callback_data=f"add_to_list:{list_name}")],
+            [InlineKeyboardButton(text="➖ Удалить товар", callback_data=f"remove_from_list:{list_name}")],
+            [InlineKeyboardButton(text="🗑 Очистить список", callback_data=f"clear_list:{list_name}")],
+            [InlineKeyboardButton(text="❌ Удалить список", callback_data=f"delete_list:{list_name}")],
+            [InlineKeyboardButton(text="🔙 К списку списков", callback_data="back_to_lists")]
+        ]
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+        
+        await callback_query.message.edit_text(text, reply_markup=keyboard)
+    except Exception as e:
+        logging.error(f"Ошибка при открытии списка: {e}")
+        await callback_query.answer("Произошла ошибка при открытии списка")
+        await show_lists_menu(callback_query.message)
 
 # Обработчик добавления товара в список
 @router.callback_query(lambda c: c.data and c.data.startswith("add_to_list:"))
