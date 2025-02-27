@@ -456,41 +456,17 @@ ai_helper = AIHelper()
 
 # Добавляем обработчик для списка покупок
 @dp.message(F.text == "🛒 Список покупок")
-async def shopping_list_menu(message: types.Message):
-    shopping_keyboard = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="📝 Показать список"), KeyboardButton(text="➕ Добавить товар")],
-            [KeyboardButton(text="➖ Удалить товар"), KeyboardButton(text="🔙 Назад в меню")]
-        ],
-        resize_keyboard=True
-    )
-    
-    await message.answer("Управление списком покупок:\n\n"
-                        "📝 Показать список - просмотр текущего списка покупок\n"
-                        "➕ Добавить товар - добавление материала в список\n"
-                        "➖ Удалить товар - удаление материала из списка", 
-                        reply_markup=shopping_keyboard)
-
-@dp.message(F.text == "📝 Показать список")
-async def show_shopping_list(message: types.Message):
-    await shopping_list.cmd_shopping_list(message)
-
-@dp.message(F.text == "➕ Добавить товар")
-async def add_to_shopping_list(message: types.Message):
-    await shopping_list.cmd_add_to_list(message)
-
-@dp.message(F.text == "➖ Удалить товар")
-async def remove_from_shopping_list(message: types.Message):
-    await shopping_list.cmd_remove_from_list(message)
+async def shopping_list_menu(message: types.Message, state: FSMContext):
+    await shopping_list.show_lists_menu(message, state)
 
 # Обработчики состояний для списка покупок
-@dp.callback_query(lambda c: c.data and c.data.startswith("select_"))
-async def callback_select_material(callback_query: types.CallbackQuery, state: FSMContext):
-    await shopping_list.process_select_material(callback_query, state)
-
 @dp.message(shopping_list.ShoppingListStates.waiting_for_quantity)
 async def handle_quantity(message: types.Message, state: FSMContext):
     await shopping_list.process_quantity(message, state)
+
+@dp.message(shopping_list.ShoppingListStates.waiting_for_list_name)
+async def handle_list_name(message: types.Message, state: FSMContext):
+    await shopping_list.process_list_name(message, state)
 
 @dp.message(F.text == "🤖 AI Помощник")
 async def ai_helper_start(message: types.Message, state: FSMContext):
@@ -516,17 +492,7 @@ async def process_ai_question(message: types.Message, state: FSMContext):
     await state.clear()
 
 
-# Обработчики callback-запросов для списка покупок
-@dp.callback_query(lambda c: c.data and c.data.startswith("remove_"))
-async def callback_remove_from_list(callback_query: types.CallbackQuery):
-    item = callback_query.data.split("remove_")[1]
-    shopping_list.remove_from_list(callback_query.from_user.id, item)
-    await callback_query.answer(f"❌ {item} удален из списка.", show_alert=True)
-    
-@dp.callback_query(lambda c: c.data == "clear_list")
-async def callback_clear_list(callback_query: types.CallbackQuery):
-    shopping_list.clear_list(callback_query.from_user.id)
-    await callback_query.answer("🗑 Ваш список покупок очищен.", show_alert=True)
+# Обработчики callback-запросов для списка покупок перенесены в модуль shopping_list
 
 # Запуск бота
 async def main():
