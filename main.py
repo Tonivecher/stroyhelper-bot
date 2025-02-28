@@ -557,17 +557,25 @@ async def main():
                 json.dump({}, f, ensure_ascii=False, indent=4)
         
         # Создание файла-блокировки для предотвращения запуска нескольких экземпляров
-        if os.path.exists("bot.lock"):
-            logging.warning("Обнаружен файл блокировки. Возможно, бот уже запущен.")
-            try:
-                os.remove("bot.lock")
-                logging.info("Старый файл блокировки удален.")
-            except Exception as e:
-                logging.error(f"Не удалось удалить файл блокировки: {e}")
-
-        # Создаем новый файл блокировки
-        with open("bot.lock", "w") as f:
-            f.write(str(os.getpid()))
+        import fcntl
+        lock_file_path = "bot.lock"
+        
+        # Открываем файл блокировки
+        lock_file = open(lock_file_path, 'w')
+        
+        try:
+            # Пытаемся получить эксклюзивную блокировку без ожидания
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            logging.info("Получена блокировка. Бот запускается...")
+            
+            # Записываем PID процесса
+            lock_file.write(str(os.getpid()))
+            lock_file.flush()
+        except IOError:
+            # Если не удалось получить блокировку, значит бот уже запущен
+            logging.critical("Не удалось получить блокировку. Бот уже запущен!")
+            lock_file.close()
+            exit(1)
         
         # Clear any existing webhook and drop pending updates
         logging.info("Удаление существующего webhook и сброс обновлений...")
@@ -672,9 +680,19 @@ async def process_material_type(message: types.Message, state: FSMContext):
 async def on_shutdown():
     """Функция для корректного завершения работы бота"""
     logging.info("Завершение работы бота...")
-    # Удаляем файл блокировки при завершении
-    if os.path.exists("bot.lock"):
-        os.remove("bot.lock")
+    
+    # Глобальная переменная для файла блокировки
+    global lock_file
+    
+    try:
+        # Снимаем блокировку и закрываем файл
+        if 'lock_file' in globals() and lock_file:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+            lock_file.close()
+            logging.info("Блокировка снята")
+    except Exception as e:
+        logging.error(f"Ошибка при снятии блокировки: {e}")
+        
     logging.info("Бот остановлен.")
 
 if __name__ == "__main__":
