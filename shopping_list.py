@@ -314,8 +314,8 @@ async def process_open_list(callback_query: types.CallbackQuery,
             [
                 InlineKeyboardButton(text="➕ Добавить товар",
                                      callback_data=f"add_to_list:{list_name}")
-            ],
-            [
+            ,
+         
                 InlineKeyboardButton(
                     text="➖ Удалить товар",
                     callback_data=f"remove_from_list:{list_name}")
@@ -323,8 +323,8 @@ async def process_open_list(callback_query: types.CallbackQuery,
             [
                 InlineKeyboardButton(text="🗑 Очистить список",
                                      callback_data=f"clear_list:{list_name}")
-            ],
-            [
+            ,
+            
                 InlineKeyboardButton(text="❌ Удалить список",
                                      callback_data=f"delete_list:{list_name}")
             ],
