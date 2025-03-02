@@ -10,10 +10,10 @@ logger = logging.getLogger(__name__)
 class AIHelper:
     def __init__(self):
         self.api = DeepSeek(
-            email="none",
-            password="none",
-            token="7kmDEdkwc5Ifko5s+oiWL7Ak/gtnxyO5n00jPruvGVI00vSGq0dMXjqkwfHtETiA",
-            chat_id="none",  # Optional, can be None
+          token="7kmDEdkwc5Ifko5s+oiWL7Ak/gtnxyO5n00jPruvGVI00vSGq0dMXjqkwfHtETiA",
+
+headless=True,  
+# Optional, can be None
             chrome_args=[],
             verbose=False,
             headless=True,
