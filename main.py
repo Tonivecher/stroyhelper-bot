@@ -7,8 +7,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 
-# Укажи свой токен бота
-TOKEN = "YOUR_BOT_TOKEN"
+# Укажи свой токен бота - должен быть валидным токеном от BotFather
+# Пример формата: "1234567890:ABCDefGhIjKlMnOpQrStUvWxYz123456789"
+TOKEN = "7953755640:AAHPzI1Mu6LA9Kbgjg7oB8KAcEaEzyMbDP4"
 
 # Включаем логирование
 logging.basicConfig(level=logging.INFO)
