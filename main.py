@@ -1,8 +1,11 @@
 import logging
 import asyncio
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
 
 # Укажи свой токен бота
 TOKEN = "YOUR_BOT_TOKEN"
@@ -10,9 +13,16 @@ TOKEN = "YOUR_BOT_TOKEN"
 # Включаем логирование
 logging.basicConfig(level=logging.INFO)
 
-# Создаём объект бота и диспетчера
+# Создание класса состояний для FSM
+class BotStates(StatesGroup):
+    waiting_for_dimensions = State()
+    waiting_for_cost_input = State()
+    waiting_for_note = State()
+
+# Создаём объект бота и диспетчера с хранилищем состояний
 bot = Bot(token=TOKEN)
-dp = Dispatcher()
+storage = MemoryStorage()
+dp = Dispatcher(storage=storage)
 
 # Клавиатура для выбора разделов
 main_keyboard = ReplyKeyboardMarkup(
@@ -21,6 +31,7 @@ main_keyboard = ReplyKeyboardMarkup(
         [KeyboardButton(text="🔍 Выбрать материалы")],
         [KeyboardButton(text="💰 Оценить стоимость")],
         [KeyboardButton(text="📝 Заметки")],
+        [KeyboardButton(text="🏠 Главное меню")]
     ],
     resize_keyboard=True
 )
@@ -38,9 +49,13 @@ materials = {
     "Минвата": 1.7
 }
 
-# Обработчик команды /start
+# Обработчик команды /start и возврата в главное меню
 @dp.message(Command("start"))
-async def cmd_start(message: types.Message):
+@dp.message(lambda message: message.text == "🏠 Главное меню")
+async def cmd_start(message: types.Message, state: FSMContext):
+    # Сбрасываем состояние при возврате в главное меню
+    await state.clear()
+    
     await message.answer(
         "Привет! Я StroyHelper — помогу рассчитать материалы для ремонта.\nВыбери действие:",
         reply_markup=main_keyboard
@@ -48,43 +63,79 @@ async def cmd_start(message: types.Message):
 
 # Обработчик выбора расчёта площади
 @dp.message(lambda message: message.text == "📐 Рассчитать площадь")
-async def calculate_area(message: types.Message):
+async def calculate_area(message: types.Message, state: FSMContext):
+    await state.set_state(BotStates.waiting_for_dimensions)
     await message.answer("Введите ширину и длину комнаты через пробел (например: 5.2 4.8):")
 
-    @dp.message()
-    async def get_dimensions(msg: types.Message):
-        try:
-            width, length = map(float, msg.text.split())
-            area = width * length
-            await msg.answer(f"Площадь комнаты: {area:.2f} м²")
-        except ValueError:
-            await msg.answer("Некорректный ввод. Введите два числа через пробел.")
+# Обработчик для получения размеров комнаты
+@dp.message(StateFilter(BotStates.waiting_for_dimensions))
+async def get_dimensions(message: types.Message, state: FSMContext):
+    try:
+        width, length = map(float, message.text.split())
+        area = width * length
+        await message.answer(f"Площадь комнаты: {area:.2f} м²", reply_markup=main_keyboard)
+        # Сбрасываем состояние
+        await state.clear()
+    except ValueError:
+        await message.answer("Некорректный ввод. Введите два числа через пробел.")
 
 # Обработчик выбора материалов
 @dp.message(lambda message: message.text == "🔍 Выбрать материалы")
-async def list_materials(message: types.Message):
+async def list_materials(message: types.Message, state: FSMContext):
+    # Сбрасываем состояние при просмотре материалов
+    await state.clear()
+    
     text = "📋 Доступные материалы:\n"
     for mat, price in materials.items():
         text += f"• {mat} — {price} руб./м²\n"
-    await message.answer(text)
+    await message.answer(text, reply_markup=main_keyboard)
 
 # Обработчик оценки стоимости
 @dp.message(lambda message: message.text == "💰 Оценить стоимость")
-async def estimate_cost(message: types.Message):
-    await message.answer("Введите название материала и площадь через пробел (например: Ламинат 25):")
+async def estimate_cost(message: types.Message, state: FSMContext):
+    await state.set_state(BotStates.waiting_for_cost_input)
+    
+    text = "📋 Доступные материалы:\n"
+    for mat in materials.keys():
+        text += f"• {mat}\n"
+    
+    await message.answer(
+        text + "\nВведите название материала и площадь через пробел (например: Ламинат 25):"
+    )
 
-    @dp.message()
-    async def get_cost(msg: types.Message):
-        try:
-            material, area = msg.text.rsplit(maxsplit=1)
-            area = float(area)
-            if material in materials:
-                cost = materials[material] * area
-                await msg.answer(f"Примерная стоимость: {cost:.2f} руб.")
-            else:
-                await msg.answer("Материал не найден. Проверьте название.")
-        except ValueError:
-            await msg.answer("Некорректный ввод. Введите название материала и площадь.")
+# Обработчик для получения стоимости
+@dp.message(StateFilter(BotStates.waiting_for_cost_input))
+async def get_cost(message: types.Message, state: FSMContext):
+    try:
+        material, area = message.text.rsplit(maxsplit=1)
+        area = float(area)
+        
+        if material in materials:
+            cost = materials[material] * area
+            await message.answer(f"Примерная стоимость: {cost:.2f} руб.", reply_markup=main_keyboard)
+            # Сбрасываем состояние
+            await state.clear()
+        else:
+            await message.answer("Материал не найден. Проверьте название.")
+    except ValueError:
+        await message.answer("Некорректный ввод. Введите название материала и площадь.")
+
+# Обработчик для заметок
+@dp.message(lambda message: message.text == "📝 Заметки")
+async def handle_notes(message: types.Message, state: FSMContext):
+    await state.set_state(BotStates.waiting_for_note)
+    await message.answer("Введите вашу заметку для проекта ремонта:")
+
+# Обработчик для получения заметки
+@dp.message(StateFilter(BotStates.waiting_for_note))
+async def get_note(message: types.Message, state: FSMContext):
+    note = message.text
+    
+    # Здесь можно добавить сохранение заметки в базу данных
+    
+    await message.answer(f"Заметка сохранена:\n\n{note}", reply_markup=main_keyboard)
+    # Сбрасываем состояние
+    await state.clear()
 
 # Запуск бота
 async def main():
