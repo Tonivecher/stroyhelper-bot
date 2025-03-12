@@ -28,10 +28,7 @@ dp = Dispatcher(storage=storage)
 # Клавиатура для выбора разделов
 main_keyboard = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="📐 Рассчитать площадь")],
-        [KeyboardButton(text="🔍 Выбрать материалы")],
-        [KeyboardButton(text="💰 Оценить стоимость")],
-        [KeyboardButton(text="📝 Заметки")],
+        [KeyboardButton(text="📐 Рассчитать площадь")] [KeyboardButton(text="🔍 Выбрать материалы")],[KeyboardButton(text="💰 Оценить стоимость")[[KeyboardButton(text="📝 Заметки")],
         [KeyboardButton(text="🏠 Главное меню")]
     ],
     resize_keyboard=True
